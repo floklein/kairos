@@ -1,0 +1,24 @@
+import { defineManifest } from "@crxjs/vite-plugin";
+import pkg from "./package.json";
+
+export default defineManifest({
+  manifest_version: 3,
+  name: "kAI",
+  version: pkg.version,
+  icons: {
+    48: "public/logo.png",
+  },
+  action: {
+    default_icon: {
+      48: "public/logo.png",
+    },
+  },
+  permissions: ["sidePanel", "contentSettings"],
+  background: {
+    service_worker: "src/background/main.ts",
+    type: "module",
+  },
+  side_panel: {
+    default_path: "src/sidepanel/index.html",
+  },
+});
