@@ -11,7 +11,8 @@ import DOMPurify from "dompurify";
 import { useState } from "react";
 import type { Tools } from "server/src/lib/tools";
 import { Textarea } from "@/components/ui/textarea";
-import { readPage } from "@/lib/helpers";
+import { parts } from "@/lib/chat";
+import { readPage } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
 
 export function Chat() {
@@ -91,7 +92,10 @@ export function Chat() {
                     </p>
                   );
                 }
-                if (part.type === "tool-readPageText") {
+                if (
+                  part.type === "tool-readPageText" ||
+                  part.type === "tool-readPageHtml"
+                ) {
                   return (
                     <p
                       key={part.toolCallId}
@@ -103,37 +107,7 @@ export function Chat() {
                           "animate-pulse",
                       )}
                     >
-                      {
-                        {
-                          "input-streaming": "Preparing to read page...",
-                          "input-available": "Reading page...",
-                          "output-available": "Page read.",
-                          "output-error": "Error reading page.",
-                        }[part.state]
-                      }
-                    </p>
-                  );
-                }
-                if (part.type === "tool-readPageHtml") {
-                  return (
-                    <p
-                      key={part.toolCallId}
-                      className={cn(
-                        "text-muted-foreground text-xs",
-                        part.state === "output-error" && "text-destructive",
-                        (part.state === "input-streaming" ||
-                          part.state === "input-available") &&
-                          "animate-pulse",
-                      )}
-                    >
-                      {
-                        {
-                          "input-streaming": "Preparing to analyze page...",
-                          "input-available": "Analyzing page...",
-                          "output-available": "Page analyzed.",
-                          "output-error": "Error analyzing page.",
-                        }[part.state]
-                      }
+                      {parts[part.type][part.state]}
                     </p>
                   );
                 }
@@ -145,7 +119,8 @@ export function Chat() {
       </div>
       <div className="px-4 pb-4">
         <Textarea
-          placeholder="Enter your text here"
+          placeholder="Ask anything about this page..."
+          className="resize-none"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
