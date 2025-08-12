@@ -38,7 +38,7 @@ The API is running at [http://localhost:3000](http://localhost:3000).
 ```
 kairos/
 ├── apps/
-│   ├── extension/         # Extensions (CRXJS)
+│   ├── extension/   # Extensions (CRXJS)
 │   └── server/      # Backend API (Next)
 ```
 
