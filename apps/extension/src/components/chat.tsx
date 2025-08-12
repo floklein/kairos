@@ -2,32 +2,47 @@ import { useChat } from "@ai-sdk/react";
 import { Readability } from "@mozilla/readability";
 import {
   DefaultChatTransport,
-  type InferUITools,
   lastAssistantMessageIsCompleteWithToolCalls,
   type UIDataTypes,
   type UIMessage,
 } from "ai";
 import DOMPurify from "dompurify";
 import { useState } from "react";
-import type { Tools } from "server/src/lib/tools";
+import type { UITools } from "server/src/lib/tools";
+import type {
+  ClickElementMessage,
+  ClickElementResponse,
+  NavigateToMessage,
+  NavigateToResponse,
+  ReadPageMessage,
+  ReadPageResponse,
+} from "@/background/main";
 import { Textarea } from "@/components/ui/textarea";
 import { parts } from "@/lib/chat";
-import { readPage } from "@/lib/chrome";
+import { sendMessageAsync } from "@/lib/chrome";
 import { cn } from "@/lib/utils";
 
 export function Chat() {
   const [input, setInput] = useState("");
 
   const { messages, sendMessage, addToolResult } = useChat<
-    UIMessage<unknown, UIDataTypes, InferUITools<Tools>>
+    UIMessage<unknown, UIDataTypes, UITools>
   >({
     transport: new DefaultChatTransport({
       api: `${import.meta.env.VITE_SERVER_URL}/api/chat`,
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    async onToolCall({ toolCall }) {
+    onToolCall: async ({ toolCall }) => {
+      if (toolCall.dynamic) {
+        return;
+      }
       if (toolCall.toolName === "readPageText") {
-        const page = await readPage();
+        const { page } = await sendMessageAsync<
+          ReadPageMessage,
+          ReadPageResponse
+        >({
+          type: "READ_PAGE",
+        });
         if (!page) {
           return;
         }
@@ -40,25 +55,65 @@ export function Chat() {
           output: text ?? "Error reading page",
         });
       } else if (toolCall.toolName === "readPageHtml") {
-        const page = await readPage();
+        const { page } = await sendMessageAsync<
+          ReadPageMessage,
+          ReadPageResponse
+        >({
+          type: "READ_PAGE",
+        });
         if (!page) {
           return;
         }
         const html = DOMPurify.sanitize(page, {
-          ALLOWED_ATTR: ["href"],
-          ALLOW_ARIA_ATTR: false,
-          ALLOW_DATA_ATTR: false,
+          ALLOWED_ATTR: [
+            "href",
+            "src",
+            "alt",
+            "title",
+            "role",
+            "id",
+            "name",
+            "type",
+            "value",
+            "placeholder",
+          ],
         }).replace(/\s+/g, " ");
         addToolResult({
           tool: "readPageHtml",
           toolCallId: toolCall.toolCallId,
           output: html,
         });
+      } else if (toolCall.toolName === "clickElement") {
+        const { success } = await sendMessageAsync<
+          ClickElementMessage,
+          ClickElementResponse
+        >({
+          type: "CLICK_ELEMENT",
+          selector: toolCall.input.selector,
+        });
+        addToolResult({
+          tool: "clickElement",
+          toolCallId: toolCall.toolCallId,
+          output: { success },
+        });
+      } else if (toolCall.toolName === "navigateTo") {
+        const { success } = await sendMessageAsync<
+          NavigateToMessage,
+          NavigateToResponse
+        >({
+          type: "NAVIGATE_TO",
+          url: toolCall.input.url,
+        });
+        addToolResult({
+          tool: "navigateTo",
+          toolCallId: toolCall.toolCallId,
+          output: { success },
+        });
       }
     },
   });
 
-  console.log(messages);
+  console.log("messages", messages);
 
   return (
     <div className="flex h-svh flex-col overflow-hidden text-base">
@@ -94,7 +149,9 @@ export function Chat() {
                 }
                 if (
                   part.type === "tool-readPageText" ||
-                  part.type === "tool-readPageHtml"
+                  part.type === "tool-readPageHtml" ||
+                  part.type === "tool-clickElement" ||
+                  part.type === "tool-navigateTo"
                 ) {
                   return (
                     <p

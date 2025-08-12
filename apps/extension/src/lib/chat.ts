@@ -16,4 +16,16 @@ export const parts: Record<Part["type"], Record<Part["state"], string>> = {
     "output-available": "Page analyzed.",
     "output-error": "Error analyzing page.",
   },
+  "tool-clickElement": {
+    "input-streaming": "Preparing to click element...",
+    "input-available": "Clicking element...",
+    "output-available": "Element clicked.",
+    "output-error": "Error clicking element.",
+  },
+  "tool-navigateTo": {
+    "input-streaming": "Preparing to navigate to URL...",
+    "input-available": "Navigating to URL...",
+    "output-available": "Navigated to URL.",
+    "output-error": "Error navigating to URL.",
+  },
 };
