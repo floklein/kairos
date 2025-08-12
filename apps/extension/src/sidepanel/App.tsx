@@ -3,7 +3,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 export default function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="kai-theme">
+    <ThemeProvider defaultTheme="system" storageKey="kairos-theme">
       <Chat />
     </ThemeProvider>
   );

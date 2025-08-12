@@ -1,5 +1,5 @@
 {
-  "name": "kai-extension",
+  "name": "kairos",
   "private": true,
   "workspaces": [
     "apps/*",
