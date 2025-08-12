@@ -1,4 +1,5 @@
 import { useChat } from "@ai-sdk/react";
+import { Readability } from "@mozilla/readability";
 import {
   DefaultChatTransport,
   type InferUITools,
@@ -6,10 +7,11 @@ import {
   type UIDataTypes,
   type UIMessage,
 } from "ai";
+import DOMPurify from "dompurify";
 import { useState } from "react";
 import type { Tools } from "server/src/lib/tools";
-import type { ReadPageMessage, ReadPageResponse } from "@/background/main";
 import { Textarea } from "@/components/ui/textarea";
+import { readPage } from "@/lib/helpers";
 import { cn } from "@/lib/utils";
 
 export function Chat() {
@@ -23,93 +25,125 @@ export function Chat() {
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     async onToolCall({ toolCall }) {
-      if (toolCall.toolName === "readPage") {
-        try {
-          const onReadPage = (response: ReadPageResponse) => {
-            if (response.type === "READ_PAGE_RESPONSE") {
-              addToolResult({
-                tool: "readPage",
-                toolCallId: toolCall.toolCallId,
-                output: response.page,
-              });
-            }
-            chrome.runtime.onMessage.removeListener(onReadPage);
-          };
-          chrome.runtime.onMessage.addListener(onReadPage);
-          chrome.runtime.sendMessage<ReadPageMessage>({
-            type: "READ_PAGE",
-          });
-        } catch (err) {
-          console.error(err);
+      if (toolCall.toolName === "readPageText") {
+        const page = await readPage();
+        if (!page) {
+          return;
         }
+        const text = new Readability(
+          new DOMParser().parseFromString(page, "text/html"),
+        ).parse()?.textContent;
+        addToolResult({
+          tool: "readPageText",
+          toolCallId: toolCall.toolCallId,
+          output: text ?? "Error reading page",
+        });
+      } else if (toolCall.toolName === "readPageHtml") {
+        const page = await readPage();
+        if (!page) {
+          return;
+        }
+        const html = DOMPurify.sanitize(page, {
+          ALLOWED_ATTR: ["href"],
+          ALLOW_ARIA_ATTR: false,
+          ALLOW_DATA_ATTR: false,
+        }).replace(/\s+/g, " ");
+        addToolResult({
+          tool: "readPageHtml",
+          toolCallId: toolCall.toolCallId,
+          output: html,
+        });
       }
     },
   });
 
+  console.log(messages);
+
   return (
-    <div className="flex h-svh flex-col p-4 text-base">
-      <div className="flex flex-1 flex-col gap-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "flex flex-col gap-2 whitespace-pre-wrap",
-              message.role === "user" &&
-                "max-w-[80%] self-end rounded-lg bg-accent px-3 py-2",
-            )}
-          >
-            {message.parts.map((part) => {
-              switch (part.type) {
-                case "text":
-                  return <p key={part.text}>{part.text}</p>;
-                case "tool-readPage":
-                  switch (part.state) {
-                    case "input-streaming":
-                      return (
-                        <p
-                          key={part.toolCallId}
-                          className="text-muted-foreground text-sm"
-                        >
-                          Preparing to read page...
-                        </p>
-                      );
-                    case "input-available":
-                      return (
-                        <p
-                          key={part.toolCallId}
-                          className="text-muted-foreground text-sm"
-                        >
-                          Reading page...
-                        </p>
-                      );
-                    case "output-available":
-                      return (
-                        <p
-                          key={part.toolCallId}
-                          className="text-muted-foreground text-sm"
-                        >
-                          Page read.
-                        </p>
-                      );
-                    case "output-error":
-                      return (
-                        <p
-                          key={part.toolCallId}
-                          className="text-destructive text-sm"
-                        >
-                          Error reading page: {part.errorText}
-                        </p>
-                      );
-                  }
-                  break;
-                default:
-                  return null;
-              }
-            })}
-          </div>
-        ))}
+    <div className="flex h-svh flex-col overflow-hidden text-base">
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4 p-4">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn(
+                "flex flex-col gap-2 whitespace-pre-wrap",
+                message.role === "user" &&
+                  "max-w-[80%] self-end rounded-lg bg-accent px-3 py-2",
+              )}
+            >
+              {message.parts.map((part, index) => {
+                if (part.type === "text") {
+                  return <p key={part.type + index}>{part.text}</p>;
+                }
+                if (part.type === "reasoning") {
+                  return (
+                    <p
+                      key={part.type + index}
+                      className={cn(
+                        "text-muted-foreground text-xs",
+                        part.state === "streaming" && "animate-pulse",
+                      )}
+                    >
+                      {part.state === "streaming"
+                        ? "Reasoning..."
+                        : "Reasoned."}
+                    </p>
+                  );
+                }
+                if (part.type === "tool-readPageText") {
+                  return (
+                    <p
+                      key={part.toolCallId}
+                      className={cn(
+                        "text-muted-foreground text-xs",
+                        part.state === "output-error" && "text-destructive",
+                        (part.state === "input-streaming" ||
+                          part.state === "input-available") &&
+                          "animate-pulse",
+                      )}
+                    >
+                      {
+                        {
+                          "input-streaming": "Preparing to read page...",
+                          "input-available": "Reading page...",
+                          "output-available": "Page read.",
+                          "output-error": "Error reading page.",
+                        }[part.state]
+                      }
+                    </p>
+                  );
+                }
+                if (part.type === "tool-readPageHtml") {
+                  return (
+                    <p
+                      key={part.toolCallId}
+                      className={cn(
+                        "text-muted-foreground text-xs",
+                        part.state === "output-error" && "text-destructive",
+                        (part.state === "input-streaming" ||
+                          part.state === "input-available") &&
+                          "animate-pulse",
+                      )}
+                    >
+                      {
+                        {
+                          "input-streaming": "Preparing to analyze page...",
+                          "input-available": "Analyzing page...",
+                          "output-available": "Page analyzed.",
+                          "output-error": "Error analyzing page.",
+                        }[part.state]
+                      }
+                    </p>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          ))}
+        </div>
       </div>
-      <div>
+      <div className="px-4 pb-4">
         <Textarea
           placeholder="Enter your text here"
           value={input}

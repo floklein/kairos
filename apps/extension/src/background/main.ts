@@ -8,26 +8,29 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 chrome.runtime.onMessage.addListener(async (message: ReadPageMessage) => {
   if (message.type === "READ_PAGE") {
-    const tabs = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (!tabs[0].id) {
+    const tabId = (
+      await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      })
+    )[0]?.id;
+    if (!tabId) {
       console.error("No active tab found");
       throw new Error("No active tab found");
     }
-    const page = await chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: () => document.body.innerHTML,
-    });
-    console.log("page", page[0].result);
-    if (!page[0].result) {
+    const page = (
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => document.documentElement.outerHTML,
+      })
+    )[0]?.result;
+    if (!page) {
       console.error("No page content found");
       throw new Error("No page content found");
     }
     chrome.runtime.sendMessage<ReadPageResponse>({
       type: "READ_PAGE_RESPONSE",
-      page: page[0].result,
+      page,
     });
   }
 });
